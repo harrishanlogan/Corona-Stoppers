@@ -64,14 +64,15 @@ class Virus(Enemy):
 def main():
     run = True
     FPS = 60
-    wave = 1
+    wave = 0
     lives = 1
     game_font = pygame.font.SysFont("Lobster", 40)
+    lost_font = pygame.font.SysFont("comicsans", 100)
 
     enemies = []
     wave_length = 5
     virus_vel = 2
-
+    lost = False
     clock = pygame.time.Clock()
 
     player = Player(700, WIDTH / 2)  ## maybe wrong
@@ -87,21 +88,23 @@ def main():
 
         player.draw(WIN)
 
-        pygame.display.update()
+        if lost:
+            lost_label = lost_font.render("YOU GOT CORONA!", 1, (255, 0, 0))
+            WIN.blit(lost_label, (WIDTH / 2 - lost_label.get_width() / 2, 350))
 
+        pygame.display.update()
 
     while run:
         clock.tick(FPS)
         draw_window()
 
-        if len(enemies)==0:
+        if len(enemies) == 0:
             wave += 1
             virus_vel += 0.25
             wave_length += 5
             for i in range(wave_length):
-                enemy = Virus(random.randrange(-2000, 100), random.randrange(50, HEIGHT-100))
+                enemy = Virus(random.randrange(-2000, 100), random.randrange(50, HEIGHT - 100))
                 enemies.append(enemy)
-
 
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
@@ -120,9 +123,10 @@ def main():
         elif keys[pygame.K_d] and ((velocity + player.x + player.get_width()) < WIDTH):
             player.x += velocity
 
-        for rona in enemies:
+        for rona in enemies[:]:
             rona.move(virus_vel)
-
+            if rona.x + 50 > HEIGHT:
+                lost = True
 
 
 main()
