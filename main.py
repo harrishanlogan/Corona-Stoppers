@@ -139,7 +139,7 @@ class Enemy(Ship):
 
     def shoot(self):
         if self.cool_down_counter == 0:
-            laser = Bullet(self.x - 20, self.y, self.bullet_img)
+            laser = Bullet(self.x, self.y, self.bullet_img)
             self.bullets.append(laser)
             self.cool_down_counter = 1
 
