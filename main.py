@@ -7,126 +7,259 @@ pygame.font.init()
 
 WIDTH, HEIGHT = 750, 750
 WIN = pygame.display.set_mode((WIDTH, HEIGHT))
-pygame.display.set_caption("Space Shooter")
+pygame.display.set_caption("Space Shooter Tutorial")
 
-## images
-BG = pygame.transform.scale \
-    (pygame.image.load(os.path.join("assets", "background-black.png")), (WIDTH, HEIGHT))
+# Load images
+KAREN = pygame.transform.scale \
+    (pygame.image.load(os.path.join("assets", "karen.png")), (50, 50))
+
+# Player player
+MPLAYER = pygame.transform.scale \
+    (pygame.image.load(os.path.join("assets", "doctor.png")), (50, 100))
+
+# Bullets
+SYRINGE = pygame.transform.scale \
+        (pygame.image.load(os.path.join("assets", "syringecorona.png")), (50, 50))
 Corona = pygame.transform.scale \
     (pygame.image.load(os.path.join("assets", "corona.png")), (30, 30))
-Syringe = pygame.image.load(os.path.join("assets", "syringecorona.png"))
-MPLAYER = pygame.transform.scale \
-    (pygame.image.load(os.path.join("assets", "maleplayer.png")), (50, 50))
+
+# Background
+BG = pygame.transform.scale(pygame.image.load(os.path.join("assets", "hospital.jpg")), (WIDTH, HEIGHT))
 
 
-class Player:  ## MAIN PLAYER CLASS
-    def __init__(self, x, y):
+class Bullet:
+    def __init__(self, x, y, img):
         self.x = x
         self.y = y
-        self.player_img = MPLAYER
-        self.syringe_img = None
-        self.syringe = []
-        self.cdr = 0
+        self.img = img
+        self.mask = pygame.mask.from_surface(self.img)
 
     def draw(self, window):
-        window.blit(self.player_img, (self.x, self.y))
+        window.blit(self.img, (self.x, self.y))
 
-    def get_width(self):
-        return self.player_img.get_width()
+    def move(self, vel):
+        self.y += vel
 
-    def get_height(self):
-        return self.player_img.get_height()
+    def off_screen(self, height):
+        return not (self.y <= height and self.y >= 0)
+
+    def collision(self, obj):
+        return collide(self, obj)
 
 
-class Enemy:
-    def __init__(self, x, y, health=10):
+class Ship:
+    COOLDOWN = 30
+
+    def __init__(self, x, y, health=100):
         self.x = x
         self.y = y
         self.health = health
-        self.enemy_img = None
-        self.cdr = 0
+        self.ship_img = None
+        self.bullet_img = None
+        self.bullets = []
+        self.cool_down_counter = 0
 
-    def create(self, spawn):
-        spawn.blit(self.enemy_img, (self.x, self.y))
+    def draw(self, window):
+        window.blit(self.ship_img, (self.x, self.y))
+        for laser in self.bullets:
+            laser.draw(window)
+
+    def move_bullets(self, vel, obj):
+        self.cooldown()
+        for laser in self.bullets:
+            laser.move(vel)
+            if laser.off_screen(HEIGHT):
+                self.bullets.remove(laser)
+            elif laser.collision(obj):
+                obj.health -= 10
+                self.bullets.remove(laser)
+
+    def cooldown(self):
+        if self.cool_down_counter >= self.COOLDOWN:
+            self.cool_down_counter = 0
+        elif self.cool_down_counter > 0:
+            self.cool_down_counter += 1
+
+    def shoot(self):
+        if self.cool_down_counter == 0:
+            laser = Bullet(self.x, self.y, self.bullet_img)
+            self.bullets.append(laser)
+            self.cool_down_counter = 1
+
+    def get_width(self):
+        return self.ship_img.get_width()
+
+    def get_height(self):
+        return self.ship_img.get_height()
 
 
-class Virus(Enemy):
-    def __init__(self, x, y, health=10):
+class Player(Ship):
+    def __init__(self, x, y, health=100):
         super().__init__(x, y, health)
-        self.enemy_img = Corona
-        self.mask = pygame.mask.from_surface(self.enemy_img)
+        self.ship_img = MPLAYER
+        self.bullet_img = SYRINGE
+        self.mask = pygame.mask.from_surface(self.ship_img)
         self.max_health = health
 
+    def move_bullets(self, vel, objs):
+        self.cooldown()
+        for laser in self.bullets:
+            laser.move(vel)
+            if laser.off_screen(HEIGHT):
+                self.bullets.remove(laser)
+            else:
+                for obj in objs:
+                    if laser.collision(obj):
+                        objs.remove(obj)
+                        if laser in self.bullets:
+                            self.bullets.remove(laser)
+
+    def draw(self, window):
+        super().draw(window)
+        self.healthbar(window)
+
+    def healthbar(self, window):
+        pygame.draw.rect(window, (255, 0, 0),
+                         (self.x, self.y + self.ship_img.get_height() + 10, self.ship_img.get_width(), 10))
+        pygame.draw.rect(window, (0, 255, 0), (
+            self.x, self.y + self.ship_img.get_height() + 10,
+            self.ship_img.get_width() * (self.health / self.max_health),
+            10))
+
+
+class Enemy(Ship):
+    def __init__(self, x, y, health=100):
+        super().__init__(x, y, health)
+        self.ship_img = KAREN
+        self.bullet_img = Corona
+        self.mask = pygame.mask.from_surface(self.ship_img)
+
     def move(self, vel):
-        self.x += vel
+        self.y += vel
+
+    def shoot(self):
+        if self.cool_down_counter == 0:
+            laser = Bullet(self.x - 20, self.y, self.bullet_img)
+            self.bullets.append(laser)
+            self.cool_down_counter = 1
+
+
+def collide(obj1, obj2):
+    offset_x = obj2.x - obj1.x
+    offset_y = obj2.y - obj1.y
+    return obj1.mask.overlap(obj2.mask, (offset_x, offset_y)) != None
 
 
 def main():
     run = True
     FPS = 60
-    wave = 0
-    lives = 1
-    game_font = pygame.font.SysFont("Lobster", 40)
-    lost_font = pygame.font.SysFont("comicsans", 100)
+    level = 0
+    lives = 5
+    main_font = pygame.font.SysFont("comicsans", 50)
+    lost_font = pygame.font.SysFont("comicsans", 60)
 
     enemies = []
     wave_length = 5
-    virus_vel = 2
-    lost = False
+    enemy_vel = 1
+
+    player_vel = 5
+    bullet_vel = 3
+
+    player = Player(300, 630)
+
     clock = pygame.time.Clock()
 
-    player = Player(700, WIDTH / 2)  ## maybe wrong
-    velocity = 4
+    lost = False
+    lost_count = 0
 
-    def draw_window():
+    def redraw_window():
         WIN.blit(BG, (0, 0))
-        wave_label = game_font.render(f"Wave {wave}", 1, (255, 255, 255))
-        WIN.blit(wave_label, (10, 10))
+        # draw text
+        lives_label = main_font.render(f"Lives: {lives}", 1, (255, 0, 0))
+        level_label = main_font.render(f"Level: {level}", 1, (255, 0, 0))
+
+        WIN.blit(lives_label, (10, 10))
+        WIN.blit(level_label, (WIDTH - level_label.get_width() - 10, 10))
 
         for enemy in enemies:
-            enemy.create(WIN)
+            enemy.draw(WIN)
 
         player.draw(WIN)
 
         if lost:
-            lost_label = lost_font.render("YOU GOT CORONA!", 1, (255, 0, 0))
+            lost_label = lost_font.render("YOU GOT CORONA!!", 1, (255, 0, 0))
             WIN.blit(lost_label, (WIDTH / 2 - lost_label.get_width() / 2, 350))
 
         pygame.display.update()
 
     while run:
         clock.tick(FPS)
-        draw_window()
+        redraw_window()
+
+        if lives <= 0 or player.health <= 0:
+            lost = True
+            lost_count += 1
+
+        if lost:
+            if lost_count > FPS * 3:
+                run = False
+            else:
+                continue
 
         if len(enemies) == 0:
-            wave += 1
-            virus_vel += 0.25
+            level += 1
             wave_length += 5
             for i in range(wave_length):
-                enemy = Virus(random.randrange(-2000, 100), random.randrange(50, HEIGHT - 100))
+                enemy = Enemy(random.randrange(50, WIDTH - 100), random.randrange(-1500, -100))
                 enemies.append(enemy)
 
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
-                run = False
+                quit()
 
         keys = pygame.key.get_pressed()
-        if keys[pygame.K_w] and ((player.y + velocity) > 0):
-            player.y -= velocity
+        if keys[pygame.K_a] or keys[pygame.K_LEFT] and player.x - player_vel > 0:  # left
+            player.x -= player_vel
+        if keys[pygame.K_d] or keys[pygame.K_RIGHT] and player.x + player_vel + player.get_width() < WIDTH:  # right
+            player.x += player_vel
+        if keys[pygame.K_w] or keys[pygame.K_UP] and player.y - player_vel > 0:  # up
+            player.y -= player_vel
+        if keys[pygame.K_s] or keys[pygame.K_DOWN] and player.y + player_vel + player.get_height() + 15 < HEIGHT:  # down
+            player.y += player_vel
+        if keys[pygame.K_SPACE]:
+            player.shoot()
 
-        elif keys[pygame.K_s] and ((player.y + velocity + player.get_height()) < HEIGHT):
-            player.y += velocity
+        for enemy in enemies[:]:
+            enemy.move(enemy_vel)
+            enemy.move_bullets(bullet_vel, player)
 
-        elif keys[pygame.K_a] and ((player.x - velocity) > 0):
-            player.x -= velocity
+            if random.randrange(0, 2 * 60) == 1:
+                enemy.shoot()
 
-        elif keys[pygame.K_d] and ((velocity + player.x + player.get_width()) < WIDTH):
-            player.x += velocity
+            if collide(enemy, player):
+                player.health -= 10
+                enemies.remove(enemy)
+            elif enemy.y + enemy.get_height() > HEIGHT:
+                lives -= 1
+                enemies.remove(enemy)
 
-        for rona in enemies[:]:
-            rona.move(virus_vel)
-            if rona.x + 50 > HEIGHT:
-                lost = True
+        player.move_bullets(-bullet_vel, enemies)
 
 
-main()
+def main_menu():
+    title_font = pygame.font.SysFont("comicsans", 40)
+    run = True
+    while run:
+        WIN.blit(BG, (0, 0))
+        title_label = title_font.render("Are you ready to eliminate Corona?", 1, (255, 0, 0))
+        WIN.blit(title_label, (WIDTH / 2 - title_label.get_width() / 2, 350))
+        pygame.display.update()
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                run = False
+            if event.type == pygame.MOUSEBUTTONDOWN:
+                main()
+    pygame.quit()
+
+
+main_menu()
